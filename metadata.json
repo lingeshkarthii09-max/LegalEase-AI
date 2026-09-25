@@ -1,0 +1,6 @@
+{
+  "name": "LegalEase: AI-Powered Legal Document Generator",
+  "description": "Generate customizable, legally sound contracts, NDAs, lease agreements, and employment contracts with AI, featuring live editing, clause analysis, and export to PDF, DOCX, and TXT.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
