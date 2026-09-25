@@ -81,7 +81,7 @@ export default function App() {
     setErrorMsg(null);
   };
 
-  // Activity 2.2 / 4.2: POST /api/generate
+  // Activity 2.2 / 4.2: POST /api/generate with static host fallback
   const handleGenerate = async () => {
     if (!formData.document_type || !formData.parties) {
       setErrorMsg('Please specify Document Type and Involved Parties.');
@@ -92,6 +92,8 @@ export default function App() {
     setErrorMsg(null);
     setAnalysis(null);
 
+    let docResult = '';
+
     try {
       const response = await fetch('/api/generate', {
         method: 'POST',
@@ -99,38 +101,46 @@ export default function App() {
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.document) {
-        throw new Error(data.error || 'Failed to generate legal document');
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        if (response.ok && data.document) {
+          docResult = data.document;
+        }
       }
-
-      setDocumentText(data.document);
-
-      // Save to drafts history
-      const newDraft: SavedDraft = {
-        id: Date.now().toString(),
-        timestamp: new Date().toISOString(),
-        documentType: formData.document_type,
-        parties: formData.parties,
-        terms: formData.terms,
-        dates: formData.dates,
-        content: data.document,
-      };
-      setDrafts((prev) => [newDraft, ...prev.slice(0, 19)]);
     } catch (err: any) {
-      console.error('Generation error:', err);
-      setErrorMsg(err.message || 'Error occurred while generating document.');
-    } finally {
-      setIsLoading(false);
+      console.warn('API route unavailable, using client template generator:', err);
     }
+
+    // Fallback if backend API is not hosted (e.g. static Vercel deployment)
+    if (!docResult) {
+      const { generateClientTemplateDocument } = await import('./utils/clientFallbackGenerator');
+      docResult = generateClientTemplateDocument(formData);
+    }
+
+    setDocumentText(docResult);
+
+    // Save to drafts history
+    const newDraft: SavedDraft = {
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      documentType: formData.document_type,
+      parties: formData.parties,
+      terms: formData.terms,
+      dates: formData.dates,
+      content: docResult,
+    };
+    setDrafts((prev) => [newDraft, ...prev.slice(0, 19)]);
+    setIsLoading(false);
   };
 
-  // Plain English Analysis
+  // Plain English Analysis with client fallback
   const handleRunAnalysis = async () => {
     if (!documentText) return;
 
     setIsAnalyzing(true);
+    let analysisResult: DocumentAnalysis | null = null;
+
     try {
       const response = await fetch('/api/analyze', {
         method: 'POST',
@@ -140,15 +150,25 @@ export default function App() {
           document_type: formData.document_type,
         }),
       });
-      const data = await response.json();
-      if (data.analysis) {
-        setAnalysis(data.analysis);
+
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        if (response.ok && data.analysis) {
+          analysisResult = data.analysis;
+        }
       }
     } catch (e) {
-      console.warn('Analysis failed:', e);
-    } finally {
-      setIsAnalyzing(false);
+      console.warn('Analysis API route unavailable, using client fallback:', e);
     }
+
+    if (!analysisResult) {
+      const { generateClientTemplateAnalysis } = await import('./utils/clientFallbackGenerator');
+      analysisResult = generateClientTemplateAnalysis(documentText, formData.document_type);
+    }
+
+    setAnalysis(analysisResult);
+    setIsAnalyzing(false);
   };
 
   const handleLoadDraft = (draft: SavedDraft) => {
